@@ -145,10 +145,10 @@ class nvmlProcessUtilizationSample_t(Structure):
     _fields_ = [
         ("pid", ctypes.c_uint),             # PID of process running within the vGPU VM
         ("timeStamp", ctypes.c_ulonglong),  # CPU Timestamp in microseconds
-        ("smUtil", nvmlValue_t),            # SM (3D/Compute) Util Value
-        ("memUtil", nvmlValue_t),           # Frame Buffer Memory Util Value
-        ("encUtil", nvmlValue_t),           # Encoder Util Value
-        ("decUtil", nvmlValue_t)            # Decoder Util Value
+        ("smUtil", ctypes.c_uint),            # SM (3D/Compute) Util Value
+        ("memUtil", ctypes.c_uint),           # Frame Buffer Memory Util Value
+        ("encUtil", ctypes.c_uint),           # Encoder Util Value
+        ("decUtil", ctypes.c_uint)            # Decoder Util Value
     ]
 
 

@@ -34,8 +34,8 @@ class nvmlUtilization_t(Structure):
 
 class nvmlUtilization:
     def __init__(self, utilization: nvmlUtilization_t):
-        self.gpu = utilization.gpu.value
-        self.memory = utilization.memory.value
+        self.gpu = utilization.gpu
+        self.memory = utilization.memory
 
 
 class nvmlMemory_t(Structure):

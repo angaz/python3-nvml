@@ -104,7 +104,7 @@ class nvmlProcessInfo:
             else processInfo.usedGpuMemory)
 
     def __repr__(self):
-        return f"<nvmlProcessInfo(pid={self.pid}, usedGpuMemory={self.usedGpuMemory})>"
+        return f"<nvmlProcessInfo(pid={self.pid}, usedGpuMemory={self.usedGpuMemory} bytes ({self.usedGpuMemory / 1_048_576} MB))>"
 
 
 class nvmlValue_t(ctypes.Union):

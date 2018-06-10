@@ -103,6 +103,9 @@ class nvmlProcessInfo:
             if processInfo.usedGpuMemory == defines.NVML_VALUE_NOT_AVAILABLE
             else processInfo.usedGpuMemory)
 
+    def __repr__(self):
+        return f"<nvmlProcessInfo(pid={self.pid}, usedGpuMemory={self.usedGpuMemory})>"
+
 
 class nvmlValue_t(ctypes.Union):
     _fields_ = [

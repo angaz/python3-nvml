@@ -1,5 +1,6 @@
 import threading
-from ctypes import CDLL, byref, c_uint, c_char_p, create_string_buffer
+from ctypes import (
+    CDLL, byref, c_uint, c_char_p, c_ulonglong, create_string_buffer)
 from sys import platform
 
 import nvml_errors as errors
@@ -31,10 +32,11 @@ class NVMLLib:
         finally:
             libLoadLock.release()
 
-    def call(self, fn_name, *args):
+    def call(self, fn_name, *args, checkReturn=True):
         fn = self.get_fn_pointer(fn_name)
         result = fn(*args)
-        errors.nvmlReturn.test(result)
+        if checkReturn:
+            errors.nvmlReturn.test(result)
         return result
 
     def __init__(self):
@@ -89,23 +91,40 @@ class NVMLLib:
         return device
 
     def nvmlDeviceGetName(self, device):
-        c_name = create_string_buffer(defines.NVML_DEVICE_NAME_BUFFER_SIZE)
+        name = create_string_buffer(defines.NVML_DEVICE_NAME_BUFFER_SIZE)
         self.call(
             "nvmlDeviceGetName",
-            device, c_name, c_uint(defines.NVML_DEVICE_NAME_BUFFER_SIZE))
-        return c_name.value.decode()
+            device, name, c_uint(defines.NVML_DEVICE_NAME_BUFFER_SIZE))
+        return name.value.decode()
+
+    def nvmlDeviceGetBrand(self, device):
+        brand = enums.nvmlBrandType_t()
+        self.call("nvmlDeviceGetBrand", device, byref(brand))
+        return enums.nvmlBrandType(brand.value)
 
     def nvmlDeviceGetIndex(self, device):
-        c_index = c_uint()
-        self.call("nvmlDeviceGetIndex", device, byref(c_index))
-        return c_index.value
+        index = c_uint()
+        self.call("nvmlDeviceGetIndex", device, byref(index))
+        return index.value
 
     def nvmlDeviceGetSerial(self, device):
-        c_serial = create_string_buffer(defines.NVML_DEVICE_SERIAL_BUFFER_SIZE)
+        serial = create_string_buffer(defines.NVML_DEVICE_SERIAL_BUFFER_SIZE)
         self.call(
             "nvmlDeviceGetSerial",
-            device, c_serial, c_uint(defines.NVML_DEVICE_SERIAL_BUFFER_SIZE))
-        return c_serial.value.decode()
+            device, serial, c_uint(defines.NVML_DEVICE_SERIAL_BUFFER_SIZE))
+        return serial.value.decode()
+
+    def nvmlDeviceGetUUID(self, device):
+        uuid = create_string_buffer(defines.NVML_DEVICE_UUID_BUFFER_SIZE)
+        self.call(
+            "nvmlDeviceGetUUID",
+            device, uuid, c_uint(defines.NVML_DEVICE_UUID_BUFFER_SIZE))
+        return uuid.value.decode()
+
+    def nvmlDeviceGetPciInfo(self, device):
+        pciInfo = structs.nvmlPciInfo_t()
+        self.call("nvmlDeviceGetPciInfo", device, byref(pciInfo))
+        return structs.nvmlPciInfo(pciInfo)
 
     def nvmlDeviceGetUtilizationRates(self, device):
         utilization = structs.nvmlUtilization_t()
@@ -139,6 +158,81 @@ class NVMLLib:
         self.call("nvmlDeviceGetEncoderStats", device, byref(sessionCount), byref(averageFps), byref(averageLatency))
         return sessionCount.value, averageFps.value, averageLatency.value
 
+    def nvmlDeviceGetComputeRunningProcesses(self, device: structs.nvmlDevice_t, countOnly=False):
+        """
+        Get information about processes with a compute context on a device
+        """
+        count = c_uint(0)
+        result = self.call(
+            "nvmlDeviceGetComputeRunningProcesses",
+            device, byref(count), None,
+            checkReturn=False)
+
+        if countOnly:
+            if result == errors.nvmlReturn.NVML_SUCCESS:
+                return count.value
+            else:
+                raise errors.nvmlReturn.test(result)
+
+        if result == errors.nvmlReturn.NVML_SUCCESS:
+            return []
+        if result == errors.nvmlReturn.NVML_ERROR_INSUFFICIENT_SIZE:
+            count.value = count.value * 2 + 5
+            procs = (structs.nvmlProcessInfo_t * count.value)()
+
+            self.call(
+                "nvmlDeviceGetComputeRunningProcesses",
+                device, byref(count), procs)
+
+            return [
+                structs.nvmlProcessInfo(procs[i])
+                for i in range(count.value)
+            ]
+        else:
+            errors.nvmlReturn.test(result)
+
+    def nvmlDeviceGetProcessUtilization(self, device: structs.nvmlDevice_t, lastSeenTimeStamp=0):
+        utilization = structs.nvmlProcessUtilizationSample_t()
+        processSampleCount = c_uint()
+        c_lastSeenTimeStamp = c_ulonglong(lastSeenTimeStamp)
+        self.call(
+            "nvmlDeviceGetProcessUtilization",
+            device, byref(utilization), byref(processSampleCount), c_lastSeenTimeStamp)
+        return structs.nvmlProcessUtilizationSample(utilization)
+
+    def nvmlDeviceGetEncoderSessions(self, device: structs.nvmlDevice_t, countOnly=False):
+        """
+        Retrieves information about active encoder sessions on a target device.
+        """
+        sessionCount = c_uint(0)
+        result = self.call(
+            "nvmlDeviceGetEncoderSessions",
+            device, byref(sessionCount), None,
+            checkReturn=False)
+
+        if countOnly:
+            if result == errors.nvmlReturn.NVML_SUCCESS:
+                return sessionCount.value
+            else:
+                raise errors.nvmlReturn.test(result)
+
+        if result == errors.nvmlReturn.NVML_SUCCESS:
+            return []
+        if result == errors.nvmlReturn.NVML_ERROR_INSUFFICIENT_SIZE:
+            sessionCount.value = sessionCount.value * 2 + 5
+            procs = (structs.nvmlEncoderSessionInfo_t * sessionCount.value)()
+
+            self.call(
+                "nvmlDeviceGetEncoderSessions",
+                device, byref(sessionCount), procs)
+
+            return [
+                structs.nvmlProcessInfo(procs[i])
+                for i in range(sessionCount.value)
+            ]
+        else:
+            errors.nvmlReturn.test(result)
+
 
 class GPU:
     def __init__(
@@ -160,6 +254,8 @@ class GPU:
         self._pciBusId = pciBusId
 
         self._name = None
+        self._brand = None
+        self._pciInfo = None
 
     def __repr__(self):
         return f"<Nvidia GPU(index={self.index}, name={self.name})>"
@@ -171,10 +267,34 @@ class GPU:
         return self._index
 
     @property
+    def serial(self):
+        if self._serial is None:
+            self._serial = self.nvml.deviceGetSerial(self.deviceHandle)
+        return self._serial
+
+    @property
+    def uuid(self):
+        if self._uuid is None:
+            self._uuid = self.nvml.deviceGetUUID(self.deviceHandle)
+        return self._uuid
+
+    @property
+    def pciInfo(self):
+        if self._pciInfo is None:
+            self._pciInfo = self.nvml.deviceGetPciInfo(self.deviceHandle)
+        return self._pciInfo
+
+    @property
     def name(self):
         if self._name is None:
             self._name = self.nvml.deviceGetName(self.deviceHandle)
         return self._name
+
+    @property
+    def brand(self):
+        if self._brand is None:
+            self._brand = self.nvml.deviceGetBrand(self.deviceHandle)
+        return self._brand
 
     def getUtilizationRates(self):
         return self.nvml.deviceGetUtilizationRates(self.deviceHandle)
@@ -184,6 +304,15 @@ class GPU:
 
     def getEncoderStats(self):
         return self.nvml.deviceGetEncoderStats(self.deviceHandle)
+
+    def getComputeRunningProcesses(self, countOnly=False):
+        return self.nvml.deviceGetComputeRunningProcesses(self.deviceHandle, countOnly)
+
+    def getProcessUtilization(self, lastSeenTimeStamp=0):
+        return self.nvml.deviceGetProcessUtilization(self.deviceHandle, lastSeenTimeStamp)
+
+    def getEncoderSessions(self, countOnly=False):
+        return self.nvml.deviceGetEncoderSessions(self.deviceHandle, countOnly)
 
 
 class NVML:
@@ -216,8 +345,20 @@ class NVML:
     def deviceGetName(self, device):
         return self.__nvml.nvmlDeviceGetName(device)
 
+    def deviceGetBrand(self, device):
+        return self.__nvml.nvmlDeviceGetBrand(device)
+
     def deviceGetIndex(self, device):
         return self.__nvml.nvmlDeviceGetIndex(device)
+
+    def deviceGetSerial(self, device):
+        return self.__nvml.nvmlDeviceGetSerial(device)
+
+    def deviceGetUUID(self, device):
+        return self.__nvml.nvmlDeviceGetUUID(device)
+
+    def deviceGetPciInfo(self, device):
+        return self.__nvml.nvmlDeviceGetPciInfo(device)
 
     def deviceGetUtilizationRates(self, device):
         return self.__nvml.nvmlDeviceGetUtilizationRates(device)
@@ -227,6 +368,15 @@ class NVML:
 
     def deviceGetEncoderStats(self, device: structs.nvmlDevice_t):
         return self.__nvml.nvmlDeviceGetEncoderStats(device)
+
+    def deviceGetComputeRunningProcesses(self, device: structs.nvmlDevice_t, countOnly=False):
+        return self.__nvml.nvmlDeviceGetComputeRunningProcesses(device, countOnly)
+
+    def deviceGetProcessUtilization(self, device: structs.nvmlDevice_t, lastSeenTimeStamp=0):
+        return self.__nvml.nvmlDeviceGetProcessUtilization(device, lastSeenTimeStamp)
+
+    def deviceGetEncoderSessions(self, device: structs.nvmlDevice_t, countOnly=False):
+        return self.__nvml.nvmlDeviceGetEncoderSessions(device, countOnly)
 
     def getAllGPUs(self):
         return [

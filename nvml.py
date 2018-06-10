@@ -37,7 +37,7 @@ class NVMLLib:
         result = fn(*args)
         if checkReturn:
             errors.nvmlReturn.test(result)
-        return result
+        return errors.nvmlReturn(result)
 
     def __init__(self):
         if self.__nvml_lib is None:

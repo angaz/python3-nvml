@@ -110,7 +110,7 @@ class NVMLLib:
     def nvmlDeviceGetUtilizationRates(self, device):
         utilization = structs.nvmlUtilization_t()
         self.call("nvmlDeviceGetUtilizationRates", device, byref(utilization))
-        return utilization.value
+        return utilization
 
     def nvmlDeviceGetEncoderUtilization(self, device):
         samplingPeriodUs = c_uint()

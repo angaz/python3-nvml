@@ -7,8 +7,12 @@ def main():
         print(f"Found number of devices: {device_count}")
         for gpu in nvml.getAllGPUs():
             print(gpu)
-            # print(gpu.getUtilizationRates())
-            print(gpu.getEncoderStats())
+
+            utilization = gpu.getUtilizationRates()
+            print(f"Utilization GPU: {utilization.gpu}% Memory: {utilization.memory}%")
+
+            sessionCount, aveFPS, aveLatency = gpu.getEncoderStats()
+            print(f"Encoder Stats: Session Count: {sessionCount}, Average FPS: {aveFPS}, Average letency: {aveLatency}")
 
 
 if __name__ == "__main__":

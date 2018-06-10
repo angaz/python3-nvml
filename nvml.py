@@ -191,14 +191,37 @@ class NVMLLib:
         else:
             errors.nvmlReturn.test(result)
 
-    def nvmlDeviceGetProcessUtilization(self, device: structs.nvmlDevice_t, lastSeenTimeStamp=0):
-        utilization = structs.nvmlProcessUtilizationSample_t()
-        processSampleCount = c_uint()
+    def nvmlDeviceGetProcessUtilization(self, device: structs.nvmlDevice_t, lastSeenTimeStamp=0, countOnly=False):
+        processSamplesCount = c_uint(0)
         c_lastSeenTimeStamp = c_ulonglong(lastSeenTimeStamp)
-        self.call(
+
+        result = self.call(
             "nvmlDeviceGetProcessUtilization",
-            device, byref(utilization), byref(processSampleCount), c_lastSeenTimeStamp)
-        return structs.nvmlProcessUtilizationSample(utilization)
+            device, None, byref(processSamplesCount), c_lastSeenTimeStamp,
+            checkReturn=False)
+
+        if countOnly:
+            if result == errors.nvmlReturn.NVML_SUCCESS:
+                return processSamplesCount.value
+            else:
+                raise errors.nvmlReturn.test(result)
+
+        if result == errors.nvmlReturn.NVML_SUCCESS:
+            return []
+        if result == errors.nvmlReturn.NVML_ERROR_INSUFFICIENT_SIZE:
+            processSamplesCount.value = processSamplesCount.value * 2 + 5
+            procs = (structs.nvmlProcessUtilizationSample_t * processSamplesCount.value)()
+
+            self.call(
+                "nvmlDeviceGetProcessUtilization",
+                device, procs, byref(processSamplesCount), c_lastSeenTimeStamp)
+
+            return [
+                structs.nvmlProcessUtilizationSample(procs[i])
+                for i in range(processSamplesCount.value)
+            ]
+        else:
+            errors.nvmlReturn.test(result)
 
     def nvmlDeviceGetEncoderSessions(self, device: structs.nvmlDevice_t, countOnly=False):
         """

@@ -32,6 +32,12 @@ class nvmlUtilization_t(Structure):
     ]
 
 
+class nvmlUtilization:
+    def __init__(self, utilization: nvmlUtilization_t):
+        self.gpu = utilization.gpu.value
+        self.memory = utilization.memory.value
+
+
 class nvmlMemory_t(Structure):
     """
     Memory allocation information for a device.

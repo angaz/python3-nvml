@@ -110,13 +110,13 @@ class NVMLLib:
     def nvmlDeviceGetUtilizationRates(self, device):
         utilization = structs.nvmlUtilization_t()
         self.call("nvmlDeviceGetUtilizationRates", device, byref(utilization))
-        return utilization
+        return structs.nvmlUtilization(utilization)
 
     def nvmlDeviceGetEncoderUtilization(self, device):
         samplingPeriodUs = c_uint()
         utilization = c_uint()
         self.call("nvmlDeviceGetEncoderUtilization", device, byref(utilization), byref(samplingPeriodUs))
-        return utilization, samplingPeriodUs
+        return utilization.value, samplingPeriodUs.value
 
     def nvmlDeviceGetEncoderCapacity(self, device: structs.nvmlDevice_t, encoderQueryType: enums.nvmlEncoderType):
         """
@@ -137,7 +137,7 @@ class NVMLLib:
         averageFps = c_uint()
         averageLatency = c_uint()
         self.call("nvmlDeviceGetEncoderStats", device, byref(sessionCount), byref(averageFps), byref(averageLatency))
-        return sessionCount, averageFps, averageLatency
+        return sessionCount.value, averageFps.value, averageLatency.value
 
 
 class GPU:
